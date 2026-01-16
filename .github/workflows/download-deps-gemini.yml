@@ -1,49 +1,23 @@
-name: Download Offline Debs
+name: Download Debs 24.04
 
 on:
-  workflow_dispatch: # 允许手动点击按钮触发
-    inputs:
-      os_version:
-        description: 'Target Ubuntu Version'
-        required: true
-        default: 'ubuntu-20.04'
-        type: choice
-        options:
-        - ubuntu-20.04
-        - ubuntu-22.04
-        - ubuntu-24.04
+  workflow_dispatch:
 
 jobs:
   download-deps:
-    runs-on: ${{ inputs.os_version }} # 根据你的选择运行对应的系统
-    
+    runs-on: ubuntu-24.04  # 指定使用 24.04 环境
     steps:
-    - name: Clean and Update
-      run: |
-        sudo apt-get update
-
     - name: Download Dependencies
       run: |
-        # 创建存放 deb 包的目录
         mkdir -p offline_packages
-        
-        # 下载 build-essential, cmake, git, opencv 及其所有依赖
-        # -o Dir::Cache::archives=./offline_packages 指定下载目录
-        # --download-only 只下载不安装
-        # --reinstall 确保即使系统已有的基础包也重新下载一遍（防止离线机器缺失）
-        
+        sudo apt-get update
+        # 显式下载 g++，确保它被包含
         sudo apt-get install -y --download-only --reinstall -o Dir::Cache::archives=$(pwd)/offline_packages \
-        build-essential \
-        cmake \
-        git \
-        libopencv-dev
-        
-        # 修改权限，方便上传
+        build-essential g++ cmake git
         sudo chmod -R 777 offline_packages
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ubuntu-deps-${{ inputs.os_version }}
+        name: ubuntu-24.04-deps
         path: offline_packages/*.deb
-        retention-days: 1
