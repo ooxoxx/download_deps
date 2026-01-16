@@ -1,4 +1,4 @@
-name: Download Clean Room Deps (24.04)
+name: Download Darknet Ultimate Deps (24.04)
 
 on: workflow_dispatch
 
@@ -9,22 +9,32 @@ jobs:
     - name: Download in Clean Docker
       run: |
         mkdir offline_debs
-        # 启动一个纯净的 Ubuntu 24.04 容器
-        # 因为容器里什么都没装，apt 会被迫下载完整的所有依赖树（包括 g++-13, dpkg-dev 等）
+        
+        # 使用纯净的 Ubuntu 24.04 容器
+        # 这样能强制下载所有的底层依赖，绝不会漏包
         docker run --rm -v $(pwd)/offline_debs:/output ubuntu:24.04 bash -c "\
           apt-get update && \
           apt-get install -y --download-only \
+          \
           build-essential \
-          g++ \
-          cmake \
           git \
+          cmake \
+          g++ \
           dpkg-dev \
-          libstdc++-13-dev \
-          libopencv-dev && \
-          cp /var/cache/apt/archives/*.deb /output/"
-          
+          \
+          libopencv-dev \
+          \
+          libopenblas64-0 \
+          libopenblas64-0-openmp \
+          libopenblas64-openmp-dev \
+          \
+          libprotobuf-dev \
+          protobuf-compiler \
+          \
+          && cp /var/cache/apt/archives/*.deb /output/"
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ubuntu-24.04-full-deps
+        name: darknet-full-deps-24.04
         path: offline_debs/*.deb
