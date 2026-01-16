@@ -1,0 +1,60 @@
+# .github/workflows/download-deps.yml
+name: Download Darknet Dependencies
+
+on:
+  workflow_dispatch:
+    inputs:
+      ubuntu_version:
+        description: 'Ubuntu version'
+        required: true
+        default: '22.04'
+        type: choice
+        options:
+          - '20.04'
+          - '22.04'
+          - '24.04'
+
+jobs:
+  download-deps:
+    runs-on: ubuntu-latest
+    container: ubuntu:${{ github.event.inputs.ubuntu_version }}
+    
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y wget curl git
+      
+      - name: Create working directory
+        run: mkdir -p /workspace/debs
+      
+      - name: Download all required packages
+        run: |
+          cd /workspace/debs
+          apt-get download \
+            build-essential \
+            git \
+            cmake \
+            libopencv-dev \
+            libprotobuf-dev \
+            protobuf-compiler \
+            libopenblas64-0 \
+            libopenblas64-0-openmp \
+            libopenblas64-openmp-dev
+          
+          # Download all dependencies
+          apt-get install -d -o Dir::Cache::Archives="/workspace/debs" .
+      
+      - name: Download darknet source
+        run: |
+          cd /workspace
+          git clone --depth 1 https://codeberg.org/CCodeRun/darknet.git
+          tar -czvf darknet-source.tar.gz darknet/
+      
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: darknet-debs-${{ github.event.inputs.ubuntu_version }}
+          path: |
+            workspace/debs/*.deb
+            workspace/darknet-source.tar.gz
