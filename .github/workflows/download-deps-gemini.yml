@@ -1,23 +1,30 @@
-name: Download Debs 24.04
+name: Download Clean Room Deps (24.04)
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
-  download-deps:
-    runs-on: ubuntu-24.04  # 指定使用 24.04 环境
+  download-full-deps:
+    runs-on: ubuntu-latest
     steps:
-    - name: Download Dependencies
+    - name: Download in Clean Docker
       run: |
-        mkdir -p offline_packages
-        sudo apt-get update
-        # 显式下载 g++，确保它被包含
-        sudo apt-get install -y --download-only --reinstall -o Dir::Cache::archives=$(pwd)/offline_packages \
-        build-essential g++ cmake git
-        sudo chmod -R 777 offline_packages
-
+        mkdir offline_debs
+        # 启动一个纯净的 Ubuntu 24.04 容器
+        # 因为容器里什么都没装，apt 会被迫下载完整的所有依赖树（包括 g++-13, dpkg-dev 等）
+        docker run --rm -v $(pwd)/offline_debs:/output ubuntu:24.04 bash -c "\
+          apt-get update && \
+          apt-get install -y --download-only \
+          build-essential \
+          g++ \
+          cmake \
+          git \
+          dpkg-dev \
+          libstdc++-13-dev \
+          libopencv-dev && \
+          cp /var/cache/apt/archives/*.deb /output/"
+          
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ubuntu-24.04-deps
-        path: offline_packages/*.deb
+        name: ubuntu-24.04-full-deps
+        path: offline_debs/*.deb
