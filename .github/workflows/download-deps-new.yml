@@ -1,0 +1,162 @@
+name: Download Darknet Dependencies - Simple
+
+on:
+  workflow_dispatch:
+    inputs:
+      ubuntu_version:
+        description: 'Ubuntu version'
+        required: true
+        default: '22.04'
+        type: choice
+        options:
+          - '20.04'
+          - '22.04'
+          - '24.04'
+
+jobs:
+  download-deps:
+    runs-on: ubuntu-latest
+    container: ubuntu:${{ github.event.inputs.ubuntu_version }}
+    
+    steps:
+      - name: Install apt-offline
+        run: |
+          apt-get update
+          apt-get install -y apt-offline
+      
+      - name: Create working directory
+        run: |
+          mkdir -p /workspace/bundle
+          mkdir -p /workspace/source
+      
+      - name: Generate package list
+        run: |
+          cd /workspace
+          
+          # 创建包列表文件
+          cat > packages.txt << 'EOF'
+build-essential
+git
+cmake
+libopencv-dev
+libprotobuf-dev
+protobuf-compiler
+libopenblas64-0
+libopenblas64-0-openmp
+libopenblas64-openmp-dev
+EOF
+      
+      - name: Download all packages and dependencies
+        run: |
+          cd /workspace/bundle
+          
+          # 使用 apt-offline 下载所有包和依赖
+          apt-offline set --install-packages /workspace/packages.txt --skip-signature
+          apt-offline get --install-packages /workspace/packages.txt --skip-signature --bundle /workspace/bundle/
+          
+          # 下载额外的依赖（apt-offline 可能不会下载所有）
+          apt-get install -y --download-only -o Dir::Cache::Archives="/workspace/bundle" \
+            build-essential cmake libopencv-dev libprotobuf-dev protobuf-compiler \
+            libopenblas64-0 libopenblas64-0-openmp libopenblas64-openmp-dev
+          
+          echo "Downloaded files:"
+          ls -lh /workspace/bundle/*.deb 2>/dev/null || echo "No deb files found"
+      
+      - name: Download darknet source
+        run: |
+          cd /workspace/source
+          git clone --depth 1 https://codeberg.org/CCodeRun/darknet.git
+          tar -czvf ../darknet-source.tar.gz darknet/
+          cd ..
+          ls -lh darknet-source.tar.gz
+      
+      - name: Create installation script
+        run: |
+          cat > /workspace/install-darknet.sh << 'EOFSCRIPT'
+#!/bin/bash
+# Darknet 离线安装脚本
+# 用于 Ubuntu ${{ github.event.inputs.ubuntu_version }}
+
+set -e
+
+echo "========================================"
+echo "Darknet 离线安装脚本"
+echo "========================================"
+
+# 检查 root 权限
+if [ "$EUID" -ne 0 ]; then
+    echo "错误：请使用 sudo 运行"
+    exit 1
+fi
+
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEBS_DIR="$SCRIPT_DIR/debs"
+SOURCE_DIR="$SCRIPT_DIR/source"
+
+echo "[1/6] 检查必要文件..."
+if [ ! -d "$DEBS_DIR" ]; then
+    echo "错误：找不到 $DEBS_DIR 目录"
+    exit 1
+fi
+
+if [ ! -f "$SOURCE_DIR/darknet-source.tar.gz" ]; then
+    echo "错误：找不到源码包"
+    exit 1
+fi
+
+echo "[2/6] 安装依赖包..."
+cd "$DEBS_DIR"
+
+# 尝试安装所有包
+for deb in *.deb; do
+    if [ -f "$deb" ]; then
+        echo "  安装: $deb"
+        dpkg -i "$deb" 2>/dev/null || apt-get install -f -y --no-install-recommends 2>/dev/null || true
+    fi
+done
+
+# 修复依赖
+echo "  修复依赖..."
+apt-get install -f -y
+
+echo "[3/6] 解压源码..."
+cd "$SCRIPT_DIR"
+mkdir -p build
+cd build
+tar -xzf "$SOURCE_DIR/darknet-source.tar.gz"
+
+echo "[4/6] 编译 darknet..."
+cd darknet
+mkdir -p build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make -j$(nproc)
+
+echo "[5/6] 验证安装..."
+if [ -f ./darknet ]; then
+    ./darknet version
+    echo ""
+    echo "========================================"
+    echo "✓ 安装成功！"
+    echo "========================================"
+    echo "使用方式: ./build/darknet <命令>"
+else
+    echo "错误：编译失败"
+    exit 1
+fi
+
+echo "[6/6] 完成！"
+EOFSCRIPT
+
+chmod +x /workspace/install-darknet.sh
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: darknet-offline-bundle-${{ github.event.inputs.ubuntu_version }}
+          path: |
+            workspace/bundle/*.deb
+            workspace/source/
+            workspace/packages.txt
+            workspace/install-darknet.sh
