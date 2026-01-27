@@ -19,9 +19,6 @@ jobs:
             python=3.10
             pip
             conda-pack
-            # 这里我们只安装基础工具，具体的库留给下面用 pip 安装
-            # 这样可以保证所有库（包括 numpy）都与你的 pip 版 pytorch 兼容
-
       - name: Install Dependencies via Pip
         shell: bash -l {0}
         run: |
