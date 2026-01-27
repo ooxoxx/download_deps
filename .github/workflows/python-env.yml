@@ -19,23 +19,32 @@ jobs:
             python=3.10
             pip
             conda-pack
-      - name: Install Dependencies via Pip
+      - name: Install Dependencies (All in One)
         shell: bash -l {0}
         run: |
           micromamba activate aiserv
           
-          echo "Installing PyTorch from Custom URL..."
-          # --- 这里执行你指定的命令 ---
-          pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+          # 关键点：
+          # 1. 所有的包写在同一行。
+          # 2. --index-url 指定为 PyTorch 的 cu130 源 (Pip 会优先在这里找 torch 和 torchvision)。
+          # 3. --extra-index-url 指定为 PyPI (Pip 会在这里找 ultralytics, pandas 等)。
+          # 4. 显式列出 torchvision，确保它也从 cu130 源下载。
           
-          echo "Installing other dependencies..."
-          # 安装其他依赖
-          # 注意：在无头服务器(headless)推荐使用 opencv-python-headless
-          pip install ultralytics jupyterlab numpy pandas scikit-learn opencv-python-headless
+          pip install \
+            torch \
+            torchvision \
+            torchaudio \
+            ultralytics \
+            jupyterlab \
+            numpy \
+            pandas \
+            scikit-learn \
+            opencv-python-headless \
+            --index-url https://download.pytorch.org/whl/cu130 \
+            --extra-index-url https://pypi.org/simple
 
-          # 清理缓存减小体积
-          pip cache purge
-          conda clean -a -y
+          # 验证安装结果（这步很重要，能让你在日志里看到最终版本）
+          python -c "import torch; print(f'Final Torch Version: {torch.__version__}')"
 
       - name: Pack Environment
         shell: bash -l {0}
