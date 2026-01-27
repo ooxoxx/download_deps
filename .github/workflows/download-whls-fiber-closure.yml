@@ -30,6 +30,7 @@ jobs:
           pydantic-settings>=2.0.0
           pytest>=7.0.0
           httpx>=0.25.0
+          tqdm>=4.65.0
           EOF
 
       - name: Download Wheels
