@@ -1,0 +1,61 @@
+name: Build Offline AI Environment (Ubuntu 24.04)
+
+on:
+  workflow_dispatch: # 允许手动点击按钮触发
+
+jobs:
+  package-env:
+    runs-on: ubuntu-24.04 # 对应你的目标系统版本，确保glibc兼容性
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Micromamba (Faster Conda)
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-name: aiserv
+          create-args: >
+            python=3.10
+            conda-pack
+            pip
+            numpy
+            pandas
+            scikit-learn
+            jupyterlab
+            opencv
+            pytorch
+            torchvision
+            torchaudio
+            pytorch-cuda=12.4
+            -c pytorch -c nvidia -c conda-forge
+          # 注意：这里选择了 pytorch-cuda=12.4，它能在支持 CUDA 13 的驱动上完美运行。
+          # 这样可以利用 PyTorch 自带的 CUDA 库，避免与宿主机环境冲突。
+
+      - name: Install Pip Dependencies
+        shell: bash -l {0}
+        run: |
+          # 激活环境
+          micromamba activate aiserv
+          
+          # 安装 Ultralytics (YOLO) 和其他可能不在 conda-forge 上的包
+          # Ultralytics 依赖较多，使用 pip 安装通常更新更快
+          pip install ultralytics
+          
+          # 清理缓存以减小体积
+          conda clean -a -y
+          pip cache purge
+
+      - name: Pack Environment
+        shell: bash -l {0}
+        run: |
+          # 使用 conda-pack 打包整个环境
+          # --ignore-missing-files 用于忽略一些非必要的链接错误
+          conda-pack -n aiserv -o aiserv_offline.tar.gz --ignore-missing-files
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiserv-offline-pack
+          path: aiserv_offline.tar.gz
+          retention-days: 3
