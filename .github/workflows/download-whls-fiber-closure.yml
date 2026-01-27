@@ -1,0 +1,47 @@
+name: Download Python Wheels (Ubuntu 24.04 / Py3.10)
+
+on:
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  download-dependencies:
+    name: Download Wheels
+    runs-on: ubuntu-24.04 # 明确指定 Ubuntu 24.04 环境
+    
+    steps:
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Create requirements.txt
+        # 动态生成需求文件，包含你指定的库
+        run: |
+          cat <<EOF > requirements.txt
+          fastapi>=0.109.0
+          uvicorn[standard]>=0.27.0
+          python-multipart>=0.0.6
+          opencv-python>=4.8.0
+          numpy>=1.24.0
+          pydantic>=2.0.0
+          pydantic-settings>=2.0.0
+          pytest>=7.0.0
+          httpx>=0.25.0
+          EOF
+
+      - name: Download Wheels
+        run: |
+          mkdir wheels
+          # -d 指定下载目录
+          # pip download 会自动处理当前系统 (Ubuntu 24.04) 的二进制兼容性
+          pip download -r requirements.txt -d wheels
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-ubuntu2404-py310
+          path: wheels/
+          retention-days: 1
