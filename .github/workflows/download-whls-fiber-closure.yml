@@ -31,6 +31,7 @@ jobs:
           pytest>=7.0.0
           httpx>=0.25.0
           tqdm>=4.65.0
+          sahi>=0.11.0
           EOF
 
       - name: Download Wheels
