@@ -1,50 +1,38 @@
-name: jq on Ubuntu 24.04
+name: jq on Ubuntu 20.04
 
 on:
-  workflow_dispatch: # 允许手动触发
+  workflow_dispatch:
 
 jobs:
-  # 第一步：在有网的环境下载依赖包
   download-dependencies:
-    runs-on: ubuntu-24.04 # 必须使用与目标服务器相同的系统版本
+    runs-on: ubuntu-latest # Runner 本身可以用最新的，关键是下面 Docker 用什么
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download jq and recursive dependencies
+      - name: Download dependencies for Ubuntu 20.04
         run: |
-          echo "创建下载目录..."
+          echo "准备下载目录..."
           mkdir -p ./offline-packages
-          cd ./offline-packages
+          # 修改权限确保 Docker 容器内可以写入
+          chmod 777 ./offline-packages
 
-          echo "更新 apt 缓存..."
-          sudo apt-get update
-
-          echo "解析并下载 jq 及其所有依赖..."
-          # 1. 获取所有递归依赖项列表 (排除建议和推荐包，只保留核心依赖)
-          # 2. 过滤掉非包名的输出
-          # 3. 排序并去重
-          DEPS=$(apt-cache depends --recurse --no-replaces \
-            --no-suggests --no-conflicts --no-breaks --no-enhances \
-            --no-pre-depends jq | grep "^\w" | sort -u)
-          
-          echo "检测到的依赖列表: $DEPS"
-
-          # 循环下载每一个包
-          for pkg in $DEPS; do
-            echo "正在下载: $pkg"
-            apt-get download $pkg 2>/dev/null || echo "警告: 无法下载 $pkg (可能是虚拟包或已包含)"
-          done
-
-          # 确保下载 jq 本身
-          apt-get download jq
+          echo "启动 Ubuntu 20.04 容器进行下载..."
+          # 关键点：这里指定镜像为 ubuntu:20.04
+          docker run --rm -v $(pwd)/offline-packages:/download ubuntu:20.04 bash -c "
+            echo '正在更新 apt 源...' && \
+            apt-get update && \
+            echo '正在下载 jq 及其全量依赖...' && \
+            apt-get install -y --reinstall --download-only \
+            -o Dir::Cache::archives=/download \
+            jq"
 
           echo "下载完成。文件列表："
-          ls -lh
+          ls -lh ./offline-packages
 
-      - name: Upload packages as artifact
+      - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
-          name: jq-offline-bundle
+          name: jq-offline-bundle-20.04
           path: ./offline-packages/*.deb
           retention-days: 1
