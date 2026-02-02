@@ -1,0 +1,57 @@
+name: Build Offline Env (Windows + Conda-Pack)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-pack:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-name: aiserv
+          create-args: >-
+            python=3.10
+            pip
+            conda-pack
+
+      - name: Install Dependencies (Windows Pip)
+        shell: pwsh
+        run: |
+          # 在 Windows 下建议直接调用 micromamba run 或者在激活的环境中执行
+          micromamba run -n aiserv pip install `
+            torch `
+            torchvision `
+            torchaudio `
+            ultralytics `
+            jupyterlab `
+            numpy `
+            pandas `
+            scikit-learn `
+            opencv-python-headless `
+            --index-url https://download.pytorch.org/whl/cu130 `
+            --extra-index-url https://pypi.org/simple
+
+          # 验证安装
+          micromamba run -n aiserv python -c "import torch; print(f'Final Torch Version: {torch.__version__}')"
+
+      - name: Pack Environment
+        shell: pwsh
+        run: |
+          # Windows 下 conda-pack 会生成 .zip 或 .tar.gz
+          # 建议在 Windows 环境下使用 .zip，解压更方便
+          micromamba run -n aiserv conda-pack -n aiserv -o aiserv_windows_offline.zip --ignore-missing-files
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        # 如果你想手动触发也能发布，可以注释掉下面这一行 if 逻辑
+        if: startsWith(github.ref, 'refs/tags/') 
+        with:
+          files: aiserv_windows_offline.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
