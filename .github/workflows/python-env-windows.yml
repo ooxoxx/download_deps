@@ -54,9 +54,16 @@ jobs:
             
       - name: Release
         uses: softprops/action-gh-release@v1
-        # 如果你想手动触发也能发布，可以注释掉下面这一行 if 逻辑
-        if: startsWith(github.ref, 'refs/tags/') 
+        # 修改这里：支持手动触发或标签触发
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         with:
+          # 给发布的版本起个名字，防止手动运行时找不到 tag 报错
+          tag_name: "manual-build-${{ github.run_number }}"
+          name: "Offline Env Windows (Build ${{ github.run_number }})"
           files: aiserv_windows_offline.zip
+          body: |
+            Windows 离线环境包自动构建完成。
+            Python: 3.10
+            Torch Index: cu130
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
