@@ -1,7 +1,7 @@
 name: Download Incremental Sahi Wheels (Ubuntu 24.04 / Py3.10)
 
 on:
-  workflow_dispatch: # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   download-sahi-delta:
@@ -17,9 +17,8 @@ jobs:
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
-      # 1. 定义“基础环境”：即你已经拥有、不需要重复下载的包
-      #    注意：这里去掉了 sahi，保留了其他所有原来的包
-      - name: Create Base Requirements (Already Exists)
+      # 1. 定义基础清单
+      - name: Create Base Requirements
         run: |
           cat <<EOF > requirements-base.txt
           fastapi>=0.109.0
@@ -32,43 +31,49 @@ jobs:
           pytest>=7.0.0
           httpx>=0.25.0
           tqdm>=4.65.0
-          ultralytics>=8.3.0
-          torch>=2.0.0 
+          torch>=2.0.0
           torchvision>=0.15.0
           EOF
 
-      # 2. 模拟现场环境：先安装基础包
-      #    这是关键步骤。Pip 只有检测到包已安装，download 命令才会跳过它们。
-      - name: Install Base Environment
+      # 2. 安装基础环境 (CPU版本)
+      - name: Install Base Environment (CPU Lightweight)
         run: |
-          echo "Simulating existing environment..."
-          pip install -r requirements-base.txt
+          echo "Installing CPU versions of heavy libraries..."
+          pip install -r requirements-base.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
-      # 3. 【新增步骤】验证环境
-      #    如果这里报错，说明 torch 没装上，流水线会立即停止，防止后面下载 4GB 数据
+      # 3. 验证环境
       - name: Verify Installation (Gatekeeper)
         run: |
           echo "Verifying critical dependencies..."
-          
-          # 方法 A: 打印 pip 清单中 torch 的信息
-          pip show torch | grep -E "Name|Version|Location"
-          
-          # 方法 B (更严谨): 尝试导入库，确保 Python 解释器能找到它
           python -c "import torch; print(f'SUCCESS: Found Torch {torch.__version__}')"
-          python -c "import numpy; print(f'SUCCESS: Found Numpy {numpy.__version__}')"
-          
-          echo "Environment verification passed. Ready for incremental download."
 
       # 4. 执行增量下载
-      #    此时 pip 已经知道环境里有 torch 了，所以只会下载 sahi 及其缺少的依赖
       - name: Download Sahi Only (Incremental)
         run: |
           mkdir wheels
           echo "Downloading only missing dependencies for Sahi..."
           pip download sahi>=0.11.0 -d wheels
 
-      - name: Check Results
-        run: ls -lh wheels/
+      # 5. 【新增步骤】强制清理重型依赖 (Double Check)
+      #    即使 pip 意外下载了它们，这一步也会将其抹除，确保 artifact 轻量化
+      - name: Cleanup Heavy Wheels
+        run: |
+          echo "Performing final cleanup of heavy/unwanted wheels..."
+          
+          # 使用 -f 忽略“文件不存在”的错误
+          # 清理目标：nvidia CUDA库, torch核心库, triton (torch依赖)
+          rm -f wheels/nvidia_*.whl
+          rm -f wheels/torch-*.whl
+          rm -f wheels/torchvision-*.whl
+          rm -f wheels/triton-*.whl
+          
+          echo "Cleanup complete."
+
+      # 6. 检查最终结果
+      - name: Check Final Artifact Content
+        run: |
+          echo "Final list of wheels to be uploaded:"
+          ls -lh wheels/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
