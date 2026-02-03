@@ -44,19 +44,31 @@ jobs:
           echo "Simulating existing environment..."
           pip install -r requirements-base.txt
 
-      # 3. 执行增量下载
-      #    因为 numpy 等已被上面的步骤安装，pip download 只会抓取 sahi 及其独有的依赖（如 shapely）
+      # 3. 【新增步骤】验证环境
+      #    如果这里报错，说明 torch 没装上，流水线会立即停止，防止后面下载 4GB 数据
+      - name: Verify Installation (Gatekeeper)
+        run: |
+          echo "Verifying critical dependencies..."
+          
+          # 方法 A: 打印 pip 清单中 torch 的信息
+          pip show torch | grep -E "Name|Version|Location"
+          
+          # 方法 B (更严谨): 尝试导入库，确保 Python 解释器能找到它
+          python -c "import torch; print(f'SUCCESS: Found Torch {torch.__version__}')"
+          python -c "import numpy; print(f'SUCCESS: Found Numpy {numpy.__version__}')"
+          
+          echo "Environment verification passed. Ready for incremental download."
+
+      # 4. 执行增量下载
+      #    此时 pip 已经知道环境里有 torch 了，所以只会下载 sahi 及其缺少的依赖
       - name: Download Sahi Only (Incremental)
         run: |
           mkdir wheels
           echo "Downloading only missing dependencies for Sahi..."
           pip download sahi>=0.11.0 -d wheels
 
-      # 4. 检查下载结果 (可选，用于调试查看实际下载了什么)
-      - name: List Downloaded Wheels
-        run: |
-          echo "The following wheels constitute the incremental update:"
-          ls -lh wheels/
+      - name: Check Results
+        run: ls -lh wheels/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
