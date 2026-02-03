@@ -1,5 +1,5 @@
 name: Download p7zip Deb
-on: [push]
+on: [workflow_dispatch]
 
 jobs:
   download-job:
