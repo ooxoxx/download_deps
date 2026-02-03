@@ -1,0 +1,27 @@
+name: Download p7zip Deb
+on: [push]
+
+jobs:
+  download-job:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download p7zip-full .deb
+        run: |
+          sudo apt-get update
+          # 确保 universe 仓库已启用 (p7zip 通常在 universe 中)
+          sudo add-apt-repository universe
+          # 下载包到当前目录，不安装
+          apt-get download p7zip-full
+
+      - name: List downloaded files
+        run: ls -la *.deb
+
+      # 可选：上传为构件
+      - name: Upload Deb Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: p7zip-deb
+          path: ./*.deb
