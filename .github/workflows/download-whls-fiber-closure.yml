@@ -1,12 +1,12 @@
-name: Download Python Wheels (Ubuntu 24.04 / Py3.10)
+name: Download Incremental Sahi Wheels (Ubuntu 24.04 / Py3.10)
 
 on:
   workflow_dispatch: # 允许手动触发
 
 jobs:
-  download-dependencies:
-    name: Download Wheels
-    runs-on: ubuntu-24.04 # 明确指定 Ubuntu 24.04 环境
+  download-sahi-delta:
+    name: Download Incremental Wheels
+    runs-on: ubuntu-24.04
     
     steps:
       - name: Set up Python 3.10
@@ -17,10 +17,11 @@ jobs:
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
-      - name: Create requirements.txt
-        # 动态生成需求文件，包含你指定的库
+      # 1. 定义“基础环境”：即你已经拥有、不需要重复下载的包
+      #    注意：这里去掉了 sahi，保留了其他所有原来的包
+      - name: Create Base Requirements (Already Exists)
         run: |
-          cat <<EOF > requirements.txt
+          cat <<EOF > requirements-base.txt
           fastapi>=0.109.0
           uvicorn[standard]>=0.27.0
           python-multipart>=0.0.6
@@ -31,19 +32,32 @@ jobs:
           pytest>=7.0.0
           httpx>=0.25.0
           tqdm>=4.65.0
-          sahi>=0.11.0
           EOF
 
-      - name: Download Wheels
+      # 2. 模拟现场环境：先安装基础包
+      #    这是关键步骤。Pip 只有检测到包已安装，download 命令才会跳过它们。
+      - name: Install Base Environment
+        run: |
+          echo "Simulating existing environment..."
+          pip install -r requirements-base.txt
+
+      # 3. 执行增量下载
+      #    因为 numpy 等已被上面的步骤安装，pip download 只会抓取 sahi 及其独有的依赖（如 shapely）
+      - name: Download Sahi Only (Incremental)
         run: |
           mkdir wheels
-          # -d 指定下载目录
-          # pip download 会自动处理当前系统 (Ubuntu 24.04) 的二进制兼容性
-          pip download -r requirements.txt -d wheels
+          echo "Downloading only missing dependencies for Sahi..."
+          pip download sahi>=0.11.0 -d wheels
+
+      # 4. 检查下载结果 (可选，用于调试查看实际下载了什么)
+      - name: List Downloaded Wheels
+        run: |
+          echo "The following wheels constitute the incremental update:"
+          ls -lh wheels/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-ubuntu2404-py310
+          name: sahi-incremental-wheels-ubuntu2404
           path: wheels/
           retention-days: 1
