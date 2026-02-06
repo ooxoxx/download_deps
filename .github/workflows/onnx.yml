@@ -62,4 +62,15 @@ jobs:
           echo "Download complete. Listing files:"
           ls -lh offline_wheels/
 
-      - name: Zip
+      - name: Zip Wheels
+        run: |
+          cd offline_wheels
+          # 打包所有 whl 文件
+          zip -r ../onnx-stack-offline.zip ./*.whl
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnx-slim-wheels-py310-ubuntu2404
+          path: onnx-stack-offline.zip
+          retention-days: 3
