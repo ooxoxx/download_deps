@@ -1,10 +1,14 @@
-name: Download ONNX Offline Wheels (Fixed)
+name: Download ONNX & ONNXSlim Offline
 
 on:
   workflow_dispatch:
     inputs:
       onnx_version:
         description: 'Target ONNX Version (leave empty for latest)'
+        required: false
+        default: ''
+      onnxslim_version:
+        description: 'Target ONNXSlim Version (leave empty for latest)'
         required: false
         default: ''
 
@@ -25,38 +29,37 @@ jobs:
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
-      - name: Download ONNX and Dependencies
+      - name: Download Packages
         run: |
           mkdir -p offline_wheels
           
-          # 确定版本
-          PACKAGE_NAME="onnx"
+          # === 构造下载列表 ===
+          PACKAGES=""
+          
+          # 处理 ONNX 版本
           if [ ! -z "${{ inputs.onnx_version }}" ]; then
-            PACKAGE_NAME="onnx==${{ inputs.onnx_version }}"
+            PACKAGES="$PACKAGES onnx==${{ inputs.onnx_version }}"
+          else
+            PACKAGES="$PACKAGES onnx"
           fi
           
-          echo "Downloading $PACKAGE_NAME for current env (Ubuntu 24.04 / Py3.10)..."
-
-          # 修正点：
-          # 1. 去掉了 --platform, --python-version, --implementation 参数
-          # 2. 保留 --prefer-binary 以避免下载源码
-          # 3. 既然环境就是 Ubuntu 24.04 + Py3.10，直接下载最适配当前环境的包即可
+          # 处理 ONNXSlim 版本
+          if [ ! -z "${{ inputs.onnxslim_version }}" ]; then
+            PACKAGES="$PACKAGES onnxslim==${{ inputs.onnxslim_version }}"
+          else
+            PACKAGES="$PACKAGES onnxslim"
+          fi
           
-          pip download $PACKAGE_NAME \
+          echo "Target Packages: $PACKAGES"
+          echo "Start downloading using native Ubuntu 24.04 environment..."
+
+          # === 执行下载 ===
+          # 同时指定 onnx 和 onnxslim，让 pip 自动解决依赖关系（Deduping）
+          pip download $PACKAGES \
             --dest offline_wheels \
             --prefer-binary
 
           echo "Download complete. Listing files:"
           ls -lh offline_wheels/
 
-      - name: Zip Wheels
-        run: |
-          cd offline_wheels
-          zip -r ../onnx-offline-bundle.zip ./*.whl
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: onnx-wheels-py310-ubuntu2404
-          path: onnx-offline-bundle.zip
-          retention-days: 3
+      - name: Zip
