@@ -1,0 +1,69 @@
+name: Download ONNX Offline Wheels
+
+on:
+  workflow_dispatch: # 允许手动触发
+    inputs:
+      onnx_version:
+        description: 'Target ONNX Version (leave empty for latest)'
+        required: false
+        default: ''
+
+jobs:
+  download-pack:
+    runs-on: ubuntu-24.04 # 对应 Ubuntu 24.04 LTS (Noble Numbat)
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10' 
+          # 确保 pip 版本也是较新的，以支持最新的 manylinux 标签
+          architecture: 'x64'
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Download ONNX and Dependencies
+        run: |
+          # 创建存放目录
+          mkdir -p offline_wheels
+          
+          # 确定版本号
+          PACKAGE_NAME="onnx"
+          if [ ! -z "${{ inputs.onnx_version }}" ]; then
+            PACKAGE_NAME="onnx==${{ inputs.onnx_version }}"
+          fi
+          
+          echo "Downloading $PACKAGE_NAME for Linux/Python3.10..."
+
+          # 执行下载
+          # --dest: 指定下载目录
+          # --prefer-binary: 优先下载 whl 包，而非源码
+          # --platform manylinux2014_x86_64: 显式指定平台（虽然在 Linux 运行器上默认就是 Linux，但这样更稳健）
+          # --python-version 310: 强制指定 Python 版本 ABI
+          pip download $PACKAGE_NAME \
+            --dest offline_wheels \
+            --prefer-binary \
+            --python-version 310 \
+            --only-binary=:all: \
+            --platform manylinux_2_28_x86_64 \
+            --implementation cp 
+
+          echo "Download complete. Listing files:"
+          ls -lh offline_wheels/
+
+      - name: Zip Wheels for Easier Handling
+        run: |
+          # 将所有 whl 打包成一个 zip，方便下载解压
+          cd offline_wheels
+          zip -r ../onnx-offline-bundle.zip ./*.whl
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnx-wheels-py310-ubuntu2404
+          path: onnx-offline-bundle.zip
+          retention-days: 3
