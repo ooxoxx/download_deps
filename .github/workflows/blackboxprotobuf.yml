@@ -1,45 +1,46 @@
-name: Download Blackboxprotobuf Wheels (Win10/Py3.10)
+name: Build and Download Blackboxprotobuf
 
 on:
-  workflow_dispatch: # 允许手动触发
+  workflow_dispatch:
 
 jobs:
-  download-and-pack:
-    runs-on: windows-latest  # 使用 GitHub 提供的最新 Windows Server (二进制兼容 Win10/11)
+  build-and-pack:
+    runs-on: windows-latest
     
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          architecture: 'x64' 
+          architecture: 'x64'
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+      - name: Install Build Tools
+        # 安装 wheel 包，确保 pip 有能力打包
+        run: pip install --upgrade pip wheel setuptools
 
-      - name: Create Download Directory
+      - name: Create Directory
         run: mkdir offline_wheels
 
-      - name: Download Wheels (Dependencies)
+      - name: Build Wheels for Windows
+        # 核心修改：使用 pip wheel
+        # 1. 自动下载 blackboxprotobuf 源码
+        # 2. 在当前环境(Win+Py3.10)编译成 whl
+        # 3. 自动下载所有依赖的 whl (protobuf 等)
         run: |
-          pip download blackboxprotobuf `
-            --dest offline_wheels `
-            --python-version 3.10 `
-            --only-binary=:all: `
-            --platform win_amd64
+          pip wheel blackboxprotobuf `
+            --wheel-dir offline_wheels `
+            --prefer-binary
 
-      - name: Verify Installation (Optional)
-        # 验证步骤：尝试仅使用刚才下载的本地包进行安装，确保依赖完整
-        run: |
-          pip install blackboxprotobuf --no-index --find-links=offline_wheels
-          python -c "import blackboxprotobuf; print('Successfully imported blackboxprotobuf')"
+      - name: Verify Content
+        # 验证一下生成了什么，方便调试
+        run: dir offline_wheels
 
       - name: Upload Wheels as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blackboxprotobuf-py310-win-wheels
+          name: blackboxprotobuf-compiled-win10-py310
           path: offline_wheels/
           retention-days: 5
