@@ -24,14 +24,11 @@ jobs:
         run: mkdir offline_wheels
 
       - name: Download Wheels (Dependencies)
-        # 核心步骤：下载 blackboxprotobuf 及其依赖到 offline_wheels 文件夹
-        # --dest: 指定下载目录
-        # --prefer-binary: 优先下载 whl 包，避免编译
         run: |
-          pip download blackboxprotobuf ^
-            --dest offline_wheels ^
-            --python-version 3.10 ^
-            --only-binary=:all: ^
+          pip download blackboxprotobuf `
+            --dest offline_wheels `
+            --python-version 3.10 `
+            --only-binary=:all: `
             --platform win_amd64
 
       - name: Verify Installation (Optional)
