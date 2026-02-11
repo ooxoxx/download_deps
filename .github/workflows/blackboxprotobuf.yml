@@ -1,0 +1,43 @@
+name: Download Blackboxprotobuf Wheels (Win10/Py3.10)
+
+on:
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  download-and-pack:
+    runs-on: windows-latest  # 使用 GitHub 提供的最新 Windows Server (二进制兼容 Win10/11)
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          architecture: 'x64' 
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Create Download Directory
+        run: mkdir offline_wheels
+
+      - name: Download Wheels (Dependencies)
+        # 核心步骤：下载 blackboxprotobuf 及其依赖到 offline_wheels 文件夹
+        # --dest: 指定下载目录
+        # --prefer-binary: 优先下载 whl 包，避免编译
+        run: |
+          pip download blackboxprotobuf ^
+            --dest offline_wheels ^
+            --python-version 3.10 ^
+            --only-binary=:all: ^
+            --platform win_amd64
+
+      - name: Verify Installation (Optional)
+        # 验证步骤：尝试仅使用刚才下载的本地包进行安装，确保依赖完整
+        run: |
+          pip install blackboxprotobuf --no-index --find-links=offline_wheels
+          python -c "import blackboxprotobuf; print('Successfully imported blackboxprotobuf')"
+
+      - name: Upload Wheels
