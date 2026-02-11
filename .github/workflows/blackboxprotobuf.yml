@@ -40,4 +40,9 @@ jobs:
           pip install blackboxprotobuf --no-index --find-links=offline_wheels
           python -c "import blackboxprotobuf; print('Successfully imported blackboxprotobuf')"
 
-      - name: Upload Wheels
+      - name: Upload Wheels as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blackboxprotobuf-py310-win-wheels
+          path: offline_wheels/
+          retention-days: 5
