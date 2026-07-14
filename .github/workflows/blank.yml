@@ -28,20 +28,20 @@ jobs:
           .\python.exe get-pip.py
           Remove-Item get-pip.py
 
-      - name: 4. Install Required Packages (Major Version Only)
+      - name: 4. Install Required Packages
         run: |
           cd python-env
-          # 仅锁定大版本 (==X.*)，自动获取该系列下的最新小版本
-          # 依然保留 numpy 限制以防止早期 pandas 2.x 的 C 底层冲突
-          .\python.exe -m pip install "numpy<2.0.0" "pandas==2.*" "selenium==3.*" "tqdm==4.*"
+          # 新增 "urllib3<2.0.0" 限制，解决 selenium 3.x 初始化的崩溃问题
+          .\python.exe -m pip install "numpy<2.0.0" "urllib3<2.0.0" "pandas==2.*" "selenium==3.*" "tqdm==4.*"
           
           .\python.exe -m pip cache purge
 
-      - name: 5. Validate Environment (Test Imports)
+      - name: 5. Validate Environment (Test Imports & Selenium Init)
         run: |
           cd python-env
-          # 改为纯英文输出，避免 Windows 控制台编码不支持 Emoji 和中文导致报错
-          .\python.exe -c "import numpy; import pandas; import selenium; import tqdm; print('Validation Passed: All packages imported successfully!')"
+          # 验证基础库导入，并加入 Selenium 驱动初始化测试
+          # 使用 --headless 无头模式在后台尝试拉起 Chrome
+          .\python.exe -c "import pandas; import tqdm; from selenium import webdriver; options = webdriver.ChromeOptions(); options.add_argument('--headless'); options.add_argument('--disable-gpu'); driver = webdriver.Chrome(options=options); driver.quit(); print('Validation Passed: Selenium initialized successfully!')"
 
       - name: 6. Compress Environment Package
         run: |
