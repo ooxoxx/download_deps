@@ -1,0 +1,57 @@
+name: Build Windows Portable Python Environment
+
+on:
+  workflow_dispatch: # 允许在 GitHub Actions 页面手动点击触发
+  push:
+    paths:
+      - '.github/workflows/build-python-env.yml' # 当修改此文件时自动触发
+
+jobs:
+  build-env:
+    runs-on: windows-latest
+
+    steps:
+      - name: 1. Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 2. Download Python 3.10 Embeddable
+        run: |
+          # 下载 Python 3.10.11 嵌入式版本 (64位)
+          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip" -OutFile "python-embed.zip"
+          # 解压到 python-env 文件夹
+          Expand-Archive -Path "python-embed.zip" -DestinationPath "python-env"
+
+      - name: 3. Enable site-packages and Install pip
+        run: |
+          cd python-env
+          
+          # 修改 ._pth 文件：取消注释 'import site'，这是允许嵌入版 Python 使用第三方库的关键一步
+          (Get-Content python310._pth) -replace '#import site', 'import site' | Set-Content python310._pth
+          
+          # 下载 get-pip.py 并安装 pip
+          Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile "get-pip.py"
+          .\python.exe get-pip.py
+          
+          # 删除安装脚本以节省空间
+          Remove-Item get-pip.py
+
+      - name: 4. Install Required Packages
+        run: |
+          cd python-env
+          # 使用嵌入版的 python 安装你指定的库版本
+          .\python.exe -m pip install pandas~=2.0.3 selenium~=3.14.1 tqdm~=4.65.0
+          
+          # 清理 pip 缓存，进一步减小最终压缩包的体积
+          .\python.exe -m pip cache purge
+
+      - name: 5. Compress Environment Package
+        run: |
+          # 将环境打包成 zip
+          Compress-Archive -Path python-env\* -DestinationPath windows-python-env.zip
+
+      - name: 6. Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-python-3.10-env
+          path: windows-python-env.zip
+          retention-days: 7 # 压缩包在 GitHub 上保留 7 天
