@@ -40,8 +40,8 @@ jobs:
       - name: 5. Validate Environment (Test Imports)
         run: |
           cd python-env
-          # 验证所有包是否安装成功且没有底层依赖冲突
-          .\python.exe -c "import numpy; import pandas; import selenium; import tqdm; print('✅ 验证成功：所有指定的依赖包均可正常导入！')"
+          # 改为纯英文输出，避免 Windows 控制台编码不支持 Emoji 和中文导致报错
+          .\python.exe -c "import numpy; import pandas; import selenium; import tqdm; print('Validation Passed: All packages imported successfully!')"
 
       - name: 6. Compress Environment Package
         run: |
