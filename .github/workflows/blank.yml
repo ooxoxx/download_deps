@@ -21,15 +21,12 @@ jobs:
 
       - name: 3. Download Portable Chrome & Chromedriver
         run: |
-          # 使用 Google 官方的 Chrome for Testing 稳定版 (126.0.6478.182)
           $cft_version = "126.0.6478.182"
           
-          # 下载 Chrome 浏览器便携版
           Invoke-WebRequest -Uri "https://storage.googleapis.com/chrome-for-testing-public/$cft_version/win64/chrome-win64.zip" -OutFile "chrome.zip"
           Expand-Archive -Path "chrome.zip" -DestinationPath "temp_chrome"
           Move-Item -Path "temp_chrome\chrome-win64" -Destination "python-env\chrome"
           
-          # 下载匹配的 Chromedriver
           Invoke-WebRequest -Uri "https://storage.googleapis.com/chrome-for-testing-public/$cft_version/win64/chromedriver-win64.zip" -OutFile "chromedriver.zip"
           Expand-Archive -Path "chromedriver.zip" -DestinationPath "temp_driver"
           Move-Item -Path "temp_driver\chromedriver-win64\chromedriver.exe" -Destination "python-env\"
@@ -46,14 +43,23 @@ jobs:
       - name: 5. Install Required Packages
         run: |
           cd python-env
-          # 限制 urllib3 和 numpy 的版本以解决底层冲突
-          .\python.exe -m pip install "numpy<2.0.0" "urllib3<2.0.0" "pandas==2.*" "selenium==3.*" "tqdm==4.*"
+          # 正常安装包，暂时不清理缓存，以便下一步能快速导出
+          .\python.exe -m pip install "numpy<2.0.0" "urllib3<2.0.0" "pandas==2.*" "selenium==3.*" "tqdm==4.*" "openpyxl==3.*"
+
+      - name: 6. Export Offline WHL Packages
+        run: |
+          # 创建一个用于存放离线包的目录 (在 python-env 外面，避免影响绿色环境体积)
+          New-Item -ItemType Directory -Force -Path "offline_wheels"
+          
+          cd python-env
+          # 使用 pip download 下载所有的离线安装包（由于刚才安装过，这里会极速命中本地缓存并复制出 whl 文件）
+          .\python.exe -m pip download -d "..\offline_wheels" "numpy<2.0.0" "urllib3<2.0.0" "pandas==2.*" "selenium==3.*" "tqdm==4.*" "openpyxl==3.*"
+          
+          # 导出完成后，清理掉没用的 pip 缓存
           .\python.exe -m pip cache purge
 
-      - name: 6. Inject Zero-Config Selenium Hook (Monkeypatch)
+      - name: 7. Inject Zero-Config Selenium Hook (Monkeypatch)
         run: |
-          # 动态生成 sitecustomize.py，Python 在启动时会自动执行该文件
-          # 它的作用是拦截 Selenium 3 的初始化，并自动填入刚才下载的便携版浏览器路径
           $hook_code = @"
           import os
           import sys
@@ -69,7 +75,6 @@ jobs:
                            desired_capabilities=None, service_log_path=None,
                            chrome_options=None, keep_alive=True):
                   
-                  # 获取当前 python.exe 所在的根目录
                   env_dir = os.path.dirname(sys.executable)
                   portable_chrome = os.path.join(env_dir, 'chrome', 'chrome.exe')
                   portable_driver = os.path.join(env_dir, 'chromedriver.exe')
@@ -77,15 +82,12 @@ jobs:
                   if options is None:
                       options = ChromeOptions()
                   
-                  # 如果找到了自带的 Chrome，并且用户没有指定浏览器路径，则自动挂接
                   if os.path.exists(portable_chrome) and not options.binary_location:
                       options.binary_location = portable_chrome
                       
-                  # 如果找到了自带的 driver，并且用户使用的是默认参数，则自动挂接
                   if executable_path == 'chromedriver' and os.path.exists(portable_driver):
                       executable_path = portable_driver
                       
-                  # 调用原本的 Selenium 初始化
                   original_init(self, executable_path=executable_path, port=port,
                                 options=options, service_args=service_args,
                                 desired_capabilities=desired_capabilities,
@@ -97,23 +99,32 @@ jobs:
               pass
           "@
           
-          # 将此脚本写入到 site-packages 中，实现隐式调用
           $out_path = "python-env\Lib\site-packages\sitecustomize.py"
           Out-File -FilePath $out_path -InputObject $hook_code -Encoding utf8
 
-      - name: 7. Validate Environment (True Zero-Config Test)
+      - name: 8. Validate Environment (True Zero-Config Test)
         run: |
           cd python-env
-          # 注意：现在的测试代码中，没有任何路径配置！直接 webdriver.Chrome(options=options) 即可启动
-          .\python.exe -c "import pandas; import tqdm; from selenium import webdriver; options = webdriver.ChromeOptions(); options.add_argument('--headless'); driver = webdriver.Chrome(options=options); print('Browser Title:', driver.execute_script('return document.title')); driver.quit(); print('Validation Passed: Zero-Config Selenium initialized successfully!')"
+          .\python.exe -c "import pandas; import tqdm; import openpyxl; from selenium import webdriver; options = webdriver.ChromeOptions(); options.add_argument('--headless'); driver = webdriver.Chrome(options=options); print('Browser Title:', driver.execute_script('return document.title')); driver.quit(); print('Validation Passed: Zero-Config Selenium & openpyxl initialized successfully!')"
 
-      - name: 8. Compress Environment Package
+      - name: 9. Compress Environment Package & Wheels
         run: |
+          # 压缩主环境 (便携版)
           Compress-Archive -Path python-env\* -DestinationPath windows-python-env.zip
+          
+          # 压缩纯离线依赖包
+          Compress-Archive -Path offline_wheels\* -DestinationPath offline-wheels.zip
 
-      - name: 9. Upload Artifact
+      - name: 10. Upload Portable Environment Artifact
         uses: actions/upload-artifact@v4
         with:
           name: portable-python-3.10-env
           path: windows-python-env.zip
+          retention-days: 7
+
+      - name: 11. Upload Offline Wheels Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-wheels-packages
+          path: offline-wheels.zip
           retention-days: 7
